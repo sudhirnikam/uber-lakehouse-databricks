@@ -16,7 +16,7 @@ dp.create_streaming_table(
 # Bulk/Initial Load
 @dp.append_flow(
   target = "uber_catalog.silver.stg_rides"
-  ) https://adb-7405607910089212.12.azuredatabricks.net/editor/notebooks/3538531268910556?contextId=pipeline%3Aad728eea-6665-46f6-8768-e29b2ea70afd&o=7405607910089212$0
+  )
 def rides_bulk():
     df = spark.readStream.table("uber_catalog.bronze.bulk_rides")
     df = df.withColumn("booking_timestamp", col("booking_timestamp").cast("timestamp"))
