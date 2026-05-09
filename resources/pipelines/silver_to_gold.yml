@@ -7,6 +7,6 @@ resources:
             include: ../../src/pipelines/silver_to_gold/transformations/**
       schema: gold
       photon: true
-      catalog: uber_catalog
+      catalog: ${var.catalog}
       serverless: true
       root_path: ../../src/pipelines

@@ -14,6 +14,8 @@ variables:
     description: The catalog to use
   schema:
     description: The schema to use
+  storage_account:
+    description: ADLS Gen2 storage account for the raw landing zone
 
 targets:
   dev:
@@ -31,6 +33,7 @@ targets:
     variables:
       catalog: uber_catalog
       schema: dev
+      storage_account: dluberlakehousedev
 
   prod:
     mode: production
@@ -39,8 +42,9 @@ targets:
       # We explicitly deploy to /Workspace/Users/d6184f58-e32d-4308-8d4b-de8e7ac27ca0 to make sure we only have a single copy.
       root_path: /Workspace/Users/d6184f58-e32d-4308-8d4b-de8e7ac27ca0/.bundle/${bundle.name}/${bundle.target}
     variables:
-      catalog: uber_catalog
+      catalog: uber_catalog_prod
       schema: prod
+      storage_account: dluberlakehouseprod
     permissions:
       - service_principal_name: d6184f58-e32d-4308-8d4b-de8e7ac27ca0
         level: CAN_MANAGE

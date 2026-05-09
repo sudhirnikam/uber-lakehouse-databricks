@@ -9,6 +9,6 @@ resources:
             include: ../../src/pipelines/bronze_to_silver/transformations/silver_obt.sql
       schema: silver
       photon: true
-      catalog: uber_catalog
+      catalog: ${var.catalog}
       serverless: true
       root_path: ../../src/pipelines
