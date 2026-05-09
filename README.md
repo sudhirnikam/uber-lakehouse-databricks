@@ -2,9 +2,6 @@
 
 End-to-end demo of an Uber-style ride-data lakehouse on Azure Databricks. Synthetic ride events are produced by a FastAPI app, streamed through Azure Event Hubs, then ingested and progressively refined through bronze, silver, and gold layers using Lakeflow Declarative Pipelines (formerly Delta Live Tables). The whole platform is defined and deployed via Databricks Asset Bundles.
 
-![Architecture overview](docs/screenshots/architecture.png)
-> _Placeholder: high-level architecture diagram (FastAPI → Event Hubs → Landing → Bronze → Silver → Gold)._
-
 ---
 
 ## Architecture
@@ -21,7 +18,6 @@ The pipeline follows the **medallion architecture**:
 Each transition is its own Lakeflow Declarative Pipeline; they are chained by a single Databricks Job.
 
 ![Medallion flow](docs/screenshots/medallion_flow.png)
-> _Placeholder: screenshot of the job DAG in Databricks (landing_to_bronze → bronze_to_silver → silver_to_gold)._
 
 ---
 
@@ -68,9 +64,6 @@ uber-lakehouse-databricks/
 └── .env.template
 ```
 
-![Repo layout in IDE](docs/screenshots/repo_structure.png)
-> _Placeholder: VS Code / Cursor screenshot showing the folder tree._
-
 ---
 
 ## Prerequisites
@@ -111,9 +104,6 @@ EVENT_HUBNAME=<event-hub-name>
 databricks auth login --host https://adb-7405607910089212.12.azuredatabricks.net
 ```
 
-![Databricks login](docs/screenshots/databricks_auth.png)
-> _Placeholder: terminal output of successful `databricks auth login`._
-
 ---
 
 ## Running the Producer Locally
@@ -127,10 +117,8 @@ uv run uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
 Then open <http://localhost:8000>. Each click on **Book** sends a fresh ride confirmation to the configured Event Hub.
 
 ![Booking UI](docs/screenshots/booking_ui.png)
-> _Placeholder: booking home page._
 
 ![Confirmation UI](docs/screenshots/confirmation_ui.png)
-> _Placeholder: ride confirmation page after booking._
 
 ---
 
@@ -156,7 +144,6 @@ databricks bundle run uber_lakehouse_job --target prod
 ```
 
 ![Bundle deploy output](docs/screenshots/bundle_deploy.png)
-> _Placeholder: terminal output of `databricks bundle deploy`._
 
 ---
 
@@ -175,10 +162,8 @@ pipeline_id: ${resources.pipelines.pipeline_landing_to_bronze.id}
 ```
 
 ![Job run graph](docs/screenshots/job_run.png)
-> _Placeholder: Databricks Jobs UI showing the successful run with three task nodes._
 
 ![Pipeline DAG](docs/screenshots/pipeline_dag.png)
-> _Placeholder: Lakeflow pipeline DAG for one of the pipelines (e.g. landing_to_bronze)._
 
 ---
 
@@ -193,7 +178,6 @@ SELECT * FROM uber_catalog.gold.<model_table> LIMIT 10;
 ```
 
 ![SQL editor results](docs/screenshots/sql_query.png)
-> _Placeholder: Databricks SQL editor showing query results from a gold table._
 
 ---
 
