@@ -1,9 +1,9 @@
 from pyspark.sql import functions as F
 from pyspark import pipelines as dp
 
-# Base path for all raw files
-RAW_LOCATION = "abfss://raw@dluberlakehousedev.dfs.core.windows.net/ingestion/"
-BASE_SCHEMA = "abfss://raw@dluberlakehousedev.dfs.core.windows.net/schema/"
+# Base paths for all raw files (set per-target in resources/pipelines/lading_to_bronze.yml)
+RAW_LOCATION = spark.conf.get("raw_location")
+BASE_SCHEMA = spark.conf.get("schema_location")
 
 # Ingest bulk_rides.json
 @dp.table(

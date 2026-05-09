@@ -9,16 +9,16 @@ select_fields_list = ["ride_id","confirmation_number","passenger_id","driver_id"
 
 # Empty Streaming Table in silver schema
 dp.create_streaming_table(
-    name="uber_catalog.silver.stg_rides",
+    name="stg_rides",
     comment="Staging table for rides data from both bulk and streaming sources"
 )
 
 # Bulk/Initial Load
 @dp.append_flow(
-  target = "uber_catalog.silver.stg_rides"
+  target = "stg_rides"
   )
 def rides_bulk():
-    df = spark.readStream.table("uber_catalog.bronze.bulk_rides")
+    df = spark.readStream.table("bronze.bulk_rides")
     df = df.withColumn("booking_timestamp", col("booking_timestamp").cast("timestamp"))
     df = df.withColumn("rating", col("rating").cast("long"))
     df = df.select(*select_fields_list)
@@ -26,10 +26,10 @@ def rides_bulk():
 
 # Streaming Load
 @dp.append_flow(
-  target = "uber_catalog.silver.stg_rides"
+  target = "stg_rides"
   ) 
 def rides_stream():
-    df = spark.readStream.table("uber_catalog.bronze.rides_raw")
+    df = spark.readStream.table("bronze.rides_raw")
     df_parsed = df.withColumn("parsed_rides", from_json(col("rides"), rides_schema))\
                 .select("parsed_rides.*")
     df_parsed = df_parsed.select(*select_fields_list)

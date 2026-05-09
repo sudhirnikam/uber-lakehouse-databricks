@@ -1,0 +1,23 @@
+resources:
+  jobs:
+    uber_lakehouse_job:
+      name: uber-lakehouse-job
+      tasks:
+        - task_key: landing_to_bronze_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.pipeline_landing_to_bronze.id}
+            full_refresh: false
+        - task_key: bronze_to_silver_pipeline
+          depends_on:
+            - task_key: landing_to_bronze_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.pipeline_bronze_to_silver.id}
+            full_refresh: false
+        - task_key: silver_to_gold_pipeline
+          depends_on:
+            - task_key: bronze_to_silver_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.pipeline_silver_to_gold.id}
+      queue:
+        enabled: true
+      performance_target: PERFORMANCE_OPTIMIZED
