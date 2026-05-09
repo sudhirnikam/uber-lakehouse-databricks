@@ -1,0 +1,12 @@
+resources:
+  pipelines:
+    pipeline_silver_to_gold:
+      name: silver_to_gold
+      libraries:
+        - glob:
+            include: ../../src/pipelines/silver_to_gold/transformations/**
+      schema: gold
+      photon: true
+      catalog: uber_catalog
+      serverless: true
+      root_path: ../../src/pipelines

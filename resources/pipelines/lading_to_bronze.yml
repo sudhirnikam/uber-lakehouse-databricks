@@ -1,0 +1,16 @@
+resources:
+  pipelines:
+    pipeline_landing_to_bronze:
+      name: landing_to_bronze
+      configuration:
+        connection_string: "<please add connection string>"
+      libraries:
+        - glob:
+            include: ../../src/pipelines/landing_to_bronze/transformations/ingest_raw_files.py
+        - glob:
+            include: ../../src/pipelines/landing_to_bronze/transformations/ingest_event_hub.py
+      schema: bronze
+      photon: true
+      catalog: uber_catalog
+      serverless: true
+      root_path:  ../../src/pipelines

@@ -1,0 +1,14 @@
+resources:
+  pipelines:
+    pipeline_bronze_to_silver:
+      name: bronze_to_silver
+      libraries:
+        - glob:
+            include: ../../src/pipelines/bronze_to_silver/transformations/bulk_stream_cmbine_tbl_load.py
+        - glob:
+            include: ../../src/pipelines/bronze_to_silver/transformations/silver_obt.sql
+      schema: silver
+      photon: true
+      catalog: uber_catalog
+      serverless: true
+      root_path: ../../src/pipelines
