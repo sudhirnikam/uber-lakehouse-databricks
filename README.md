@@ -1,9 +1,6 @@
 # Uber Lakehouse on Databricks
 
-End-to-end demo of an Uber-style ride-data lakehouse on Azure Databricks. Synthetic ride events are produced by a FastAPI app, streamed through Azure Event Hubs, then ingested and progressively refined through bronze, silver, and gold layers using Lakeflow Declarative Pipelines (formerly Delta Live Tables). The whole platform is defined and deployed via Databricks Asset Bundles.
-
-![Architecture overview](docs/screenshots/architecture.png)
-> _Placeholder: high-level architecture diagram (FastAPI → Event Hubs → Landing → Bronze → Silver → Gold)._
+End-to-end demo of an Uber-style ride-data lakehouse on Azure Databricks. Synthetic ride events are produced by a FastAPI app, streamed through Azure Event Hubs, while reference/bulk JSON files are landed into ADLS Gen2 via **Azure Data Factory**. Data is then ingested and progressively refined through bronze, silver, and gold layers using Lakeflow Declarative Pipelines (formerly Delta Live Tables). The whole platform is defined and deployed via Databricks Asset Bundles.
 
 ---
 
@@ -11,17 +8,16 @@ End-to-end demo of an Uber-style ride-data lakehouse on Azure Databricks. Synthe
 
 The pipeline follows the **medallion architecture**:
 
-| Layer  | Source                                  | Schema  | Purpose                                              |
-|--------|-----------------------------------------|---------|------------------------------------------------------|
-| Landing| Azure Event Hubs + raw JSON files       | —       | Untouched event/file ingest                          |
-| Bronze | Landing                                 | bronze  | Append-only raw tables in Delta                      |
-| Silver | Bronze                                  | silver  | Cleaned, conformed, joined OBT (one big table)       |
-| Gold   | Silver                                  | gold    | Business-ready aggregates / models                   |
+| Layer  | Source                                          | Schema  | Purpose                                              |
+|--------|-------------------------------------------------|---------|------------------------------------------------------|
+| Landing| Azure Event Hubs + ADLS Gen2 raw files (via ADF)| —       | Untouched event/file ingest                          |
+| Bronze | Landing                                         | bronze  | Append-only raw tables in Delta                      |
+| Silver | Bronze                                          | silver  | Cleaned, conformed, joined OBT (one big table)       |
+| Gold   | Silver                                          | gold    | Business-ready aggregates / models                   |
 
 Each transition is its own Lakeflow Declarative Pipeline; they are chained by a single Databricks Job.
 
 ![Medallion flow](docs/screenshots/medallion_flow.png)
-> _Placeholder: screenshot of the job DAG in Databricks (landing_to_bronze → bronze_to_silver → silver_to_gold)._
 
 ---
 
@@ -30,6 +26,8 @@ Each transition is its own Lakeflow Declarative Pipeline; they are chained by a 
 - **Azure Databricks** — Unity Catalog (`uber_catalog`), serverless compute, Photon
 - **Lakeflow Declarative Pipelines** — streaming + batch transformations
 - **Databricks Asset Bundles (DABs)** — infra-as-code for jobs, pipelines, permissions
+- **Azure Data Factory (ADF)** — orchestrated copy of bulk/reference JSONs into the ADLS Gen2 landing zone
+- **Azure Data Lake Storage Gen2** — `abfss://raw@<storage>.dfs.core.windows.net` landing zone
 - **Azure Event Hubs** — streaming source for ride events
 - **FastAPI + Faker** — synthetic ride-event producer
 - **Python 3.12**, managed with `uv`
@@ -68,14 +66,15 @@ uber-lakehouse-databricks/
 └── .env.template
 ```
 
-![Repo layout in IDE](docs/screenshots/repo_structure.png)
-> _Placeholder: VS Code / Cursor screenshot showing the folder tree._
-
 ---
 
 ## Prerequisites
 
 - Azure subscription with an **Event Hubs** namespace
+- **Azure Data Lake Storage Gen2** account (e.g. `dluberlakehousedev` for dev, `dluberlakehouseprod` for prod) with:
+  - a `raw` container holding `ingestion/` (Copy destination) and `schema/` (Auto Loader schema-tracking)
+  - a `config` container holding `files_array.json` (driver list for the ADF Lookup activity)
+- **Azure Data Factory** instance with a Lookup → ForEach → HTTP Copy pipeline that pulls the JSONs from the GitHub repo into the ADLS landing zone
 - **Azure Databricks** workspace with Unity Catalog enabled and a catalog named `uber_catalog` (or update `databricks.yml`)
 - [Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html) `>= 0.220`
 - Python 3.12 and [`uv`](https://docs.astral.sh/uv/)
@@ -111,9 +110,6 @@ EVENT_HUBNAME=<event-hub-name>
 databricks auth login --host https://adb-7405607910089212.12.azuredatabricks.net
 ```
 
-![Databricks login](docs/screenshots/databricks_auth.png)
-> _Placeholder: terminal output of successful `databricks auth login`._
-
 ---
 
 ## Running the Producer Locally
@@ -127,10 +123,76 @@ uv run uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
 Then open <http://localhost:8000>. Each click on **Book** sends a fresh ride confirmation to the configured Event Hub.
 
 ![Booking UI](docs/screenshots/booking_ui.png)
-> _Placeholder: booking home page._
 
 ![Confirmation UI](docs/screenshots/confirmation_ui.png)
-> _Placeholder: ride confirmation page after booking._
+
+---
+
+## Azure Data Factory (Landing Zone Loader)
+
+While ride events flow through Event Hubs, the **bulk and reference datasets** (mapping tables and the `bulk_rides` backfill — see [data/](data/)) are published as JSON files in this **public GitHub repo** and pulled into ADLS Gen2 by an Azure Data Factory pipeline. The Auto Loader–based [ingest_raw_files.py](src/pipelines/landing_to_bronze/transformations/ingest_raw_files.py) transformation then picks them up incrementally.
+
+**Flow:**
+
+```
+GitHub raw URLs  ─►  [ADF: Lookup → ForEach → HTTP Copy]  ─►  abfss://raw@<storage>/ingestion/  ─►  DLT Auto Loader (bronze)
+```
+
+### Storage layout
+
+| Container | Path                  | Purpose                                                                 |
+|-----------|-----------------------|-------------------------------------------------------------------------|
+| `config`  | `files_array.json`    | Driver list of files to ingest — read by the ADF Lookup activity       |
+| `raw`     | `ingestion/`          | Destination for the copied JSONs — read by DLT Auto Loader              |
+| `raw`     | `schema/`             | Auto Loader schema-tracking location (per file)                         |
+
+The driver file ([src/config/files_array.json](src/config/files_array.json)) is a flat list — one entry per file to pull from GitHub:
+
+```json
+[
+  {"file": "bulk_rides"},
+  {"file": "map_cancellation_reasons"},
+  {"file": "map_cities"},
+  {"file": "map_payment_methods"},
+  {"file": "map_ride_statuses"},
+  {"file": "map_vehicle_makes"},
+  {"file": "map_vehicle_types"}
+]
+```
+
+Adding a new file to ingest is a one-line change to `files_array.json` — no ADF redeploy needed.
+
+### ADF pipeline overview
+
+The pipeline has three activities chained together:
+
+1. **Lookup** — reads `files_array.json` from the `config` container
+2. **ForEach** — iterates over the array, passing each `file` value into…
+3. **Copy (HTTP source → ADLS sink)** — pulls `https://raw.githubusercontent.com/<owner>/<repo>/<branch>/data/@{item().file}.json` and writes it to `raw/ingestion/@{item().file}.json`
+
+![ADF pipeline canvas](docs/screenshots/adf_pipeline.png)
+
+### Linked services & datasets
+
+Two linked services: an HTTP linked service pointing at `raw.githubusercontent.com`, and an ADLS Gen2 linked service for the storage account (`dluberlakehousedev` / `dluberlakehouseprod`).
+
+![ADF linked services](docs/screenshots/adf_linked_services.png)
+
+### Lookup activity (config-driven file list)
+
+Reads [src/config/files_array.json](src/config/files_array.json) from the `config` container and emits the array to the ForEach.
+
+### ForEach + HTTP Copy activity
+
+Inside the ForEach, the Copy activity uses an HTTP source (relative URL parameterized with `@{item().file}`) and writes the file unchanged into `raw/ingestion/`.
+
+### Trigger & monitoring
+
+Schedule/event trigger and the monitoring view of recent pipeline runs:
+
+![ADF run monitoring](docs/screenshots/adf_monitoring.png)
+
+> The destination path that ADF writes to **must** match the `raw_location` configured in [resources/pipelines/lading_to_bronze.yml](resources/pipelines/lading_to_bronze.yml), which is built from the `${var.storage_account}` bundle variable.
 
 ---
 
@@ -156,7 +218,6 @@ databricks bundle run uber_lakehouse_job --target prod
 ```
 
 ![Bundle deploy output](docs/screenshots/bundle_deploy.png)
-> _Placeholder: terminal output of `databricks bundle deploy`._
 
 ---
 
@@ -175,10 +236,8 @@ pipeline_id: ${resources.pipelines.pipeline_landing_to_bronze.id}
 ```
 
 ![Job run graph](docs/screenshots/job_run.png)
-> _Placeholder: Databricks Jobs UI showing the successful run with three task nodes._
 
 ![Pipeline DAG](docs/screenshots/pipeline_dag.png)
-> _Placeholder: Lakeflow pipeline DAG for one of the pipelines (e.g. landing_to_bronze)._
 
 ---
 
@@ -193,7 +252,6 @@ SELECT * FROM uber_catalog.gold.<model_table> LIMIT 10;
 ```
 
 ![SQL editor results](docs/screenshots/sql_query.png)
-> _Placeholder: Databricks SQL editor showing query results from a gold table._
 
 ---
 
