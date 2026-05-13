@@ -21,3 +21,9 @@ resources:
       queue:
         enabled: true
       performance_target: PERFORMANCE_OPTIMIZED
+      job_clusters:
+        - job_cluster_key: etl_cluster
+          new_cluster:
+            spark_version: "17.3.x-scala2.13"
+            num_workers: 1
+            node_type_id: "Standard_D4ds_v5"
